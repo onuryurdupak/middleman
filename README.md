@@ -1,22 +1,23 @@
 # fake-proxy
 
-An intermediary which forwards requests from client to server and returns the server's response to client. 
-
-#### What does it do?
+#### When do you need it?
 
 `client (A) -> fake-proxy (B) -> server (C)`  
 
 You are developing & debugging a project on your local machine `(A)` which needs to make API calls to an application on a remote machine `(C)`. You local machine `(A)` has no direct access to remote machine `(C)`, but your deployment environment `(B)` does.
 
+#### How it works?
 
+It `(B)` acts as an intermediary which forwards requests from client `(A)` to server `(C)` and returns the server's response to client. 
 
-When **fake-proxy** is placed on your deployment environment `(B)` and allowed to serve port 8080 you can make calls like:
+When **fake-proxy** is run on your deployment environment `(B)` (and allowed to host on port 8080) you can make calls like:
 
-`POST: http://{uri-B}:8080/https://target-api`
+`POST: http://{address-of-B}:8080/https://{address-of-C}`
 
 instead of:
 
-`POST: https://target-api`
+`POST: https://{address-of-C}`
+
+from your local client application.
 
 There may be circumstances where it is more practical to go this way instead of configuring & using a real http proxy.
-
