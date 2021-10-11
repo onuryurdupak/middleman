@@ -63,7 +63,6 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := h.httpCLi.Do(httpReq)
-
 	if err != nil {
 		errStr := fmt.Errorf("error executing http request: %w", err)
 		fmt.Println(errStr)
@@ -71,6 +70,7 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
+	defer res.Body.Close()
 
 	rw.WriteHeader(res.StatusCode)
 
@@ -84,7 +84,6 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = rw.Write(resBytes)
-
 	if err != nil {
 		errStr := fmt.Errorf("error writing server response for client: %w", err)
 		fmt.Println(errStr)
