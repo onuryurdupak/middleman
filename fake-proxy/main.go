@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -10,6 +12,8 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"github.com/pborman/uuid"
 )
 
 const (
@@ -36,6 +40,8 @@ type httpHandler struct {
 }
 
 func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	sessionID := uuid.New()
+
 	redirectUrl := strings.Replace(r.URL.RequestURI(), "/", "", 1)
 	parsedRedirectUrl, err := url.Parse(redirectUrl)
 
@@ -47,6 +53,7 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bodyBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		errStr := fmt.Errorf("error reading request body: %w", err)
 		fmt.Println(errStr)
@@ -54,17 +61,32 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
+	defer r.Body.Close()
+
+	fmt.Printf(`
+[REQUEST ID] : %s
+[URL]: %s
+[METHOD]: %s
+[HEADERS]:
+%s
+[REQUEST BODY]:
+%s
+
+`, sessionID, redirectUrl, r.Method, headerToPrintableFormat(r.Header), string(bodyBytes))
+
+	buffer := bytes.NewBuffer(bodyBytes)
+	nopCloser := ioutil.NopCloser(buffer)
 
 	httpReq := &http.Request{
 		Method: r.Method,
 		URL:    parsedRedirectUrl,
 		Header: r.Header,
-		Body:   r.Body,
+		Body:   nopCloser,
 	}
 
 	res, err := h.httpCLi.Do(httpReq)
 	if err != nil {
-		errStr := fmt.Errorf("error executing http request: %w", err)
+		errStr := fmt.Errorf("error executing http request: %s session ID: %s", err.Error(), sessionID)
 		fmt.Println(errStr)
 
 		_ = returnProxyError(rw, errStr.Error())
@@ -76,23 +98,46 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 	resBytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		errStr := fmt.Errorf("error reading response payload: %w", err)
+		errStr := fmt.Errorf("error reading response payload: %s session ID: %s", err.Error(), sessionID)
 		fmt.Println(errStr)
-
 		_ = returnProxyError(rw, errStr.Error())
 		return
+	}
+	defer res.Body.Close()
+
+	reader := bytes.NewReader(resBytes)
+	gzreader, err := gzip.NewReader(reader)
+	if err != nil {
+		errStr := fmt.Errorf("error creating gzip reader: %s session ID: %s", err.Error(), sessionID)
+		fmt.Println(errStr)
+		_ = returnProxyError(rw, errStr.Error())
+	}
+
+	resBytes, err = ioutil.ReadAll(gzreader)
+	if err != nil {
+		errStr := fmt.Errorf("error reading from gzip reader: %s session ID: %s", err.Error(), sessionID)
+		fmt.Println(errStr)
+		_ = returnProxyError(rw, errStr.Error())
 	}
 
 	_, err = rw.Write(resBytes)
 	if err != nil {
-		errStr := fmt.Errorf("error writing server response for client: %w", err)
+		errStr := fmt.Errorf("error writing server response for client: %s session ID: %s", err.Error(), sessionID)
 		fmt.Println(errStr)
 
 		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
 
-	fmt.Printf("Redirected request to: '%s' and received status code: '%d'", redirectUrl, res.StatusCode)
+	fmt.Printf(`
+[RESPONSE ID]: %s
+[STATUS]: %d
+[HEADERS]:
+%s
+[RESPONSE BODY]:
+%s
+
+`, sessionID, res.StatusCode, headerToPrintableFormat(res.Header), string(resBytes))
 }
 
 type proxyError struct {
@@ -113,4 +158,17 @@ func returnProxyError(rw http.ResponseWriter, errMsg string) error {
 
 	_, err := rw.Write(jsonBytes)
 	return err
+}
+
+func headerToPrintableFormat(h http.Header) string {
+	msg := ""
+	i := 0
+	for k, v := range h {
+		if len(v) == 1 {
+			msg = fmt.Sprintf("%s%s: %s", msg, k, v[0])
+		} else {
+			msg = fmt.Sprintf("%s%s: %s", msg, k, v)
+		}
+	}
+	return msg
 }
