@@ -162,7 +162,6 @@ func returnProxyError(rw http.ResponseWriter, errMsg string) error {
 
 func headerToPrintableFormat(h http.Header) string {
 	msg := ""
-	i := 0
 	for k, v := range h {
 		if len(v) == 1 {
 			msg = fmt.Sprintf("%s%s: %s", msg, k, v[0])
