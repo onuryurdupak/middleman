@@ -94,8 +94,6 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 	defer res.Body.Close()
 
-	rw.WriteHeader(res.StatusCode)
-
 	resBytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		errStr := fmt.Errorf("error reading response payload: %s session ID: %s", err.Error(), sessionID)
@@ -105,26 +103,38 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 	defer res.Body.Close()
 
-	reader := bytes.NewReader(resBytes)
-	gzreader, err := gzip.NewReader(reader)
-	if err != nil {
-		errStr := fmt.Errorf("error creating gzip reader: %s session ID: %s", err.Error(), sessionID)
-		fmt.Println(errStr)
-		_ = returnProxyError(rw, errStr.Error())
-	}
+	isGzipped := res.Header.Get("Content-Encoding") == "gzip"
 
-	resBytes, err = ioutil.ReadAll(gzreader)
-	if err != nil {
-		errStr := fmt.Errorf("error reading from gzip reader: %s session ID: %s", err.Error(), sessionID)
-		fmt.Println(errStr)
-		_ = returnProxyError(rw, errStr.Error())
+	// TODO(onur): Analyze gzip handling.
+	if isGzipped {
+		reader := bytes.NewReader(resBytes)
+		gzreader, err := gzip.NewReader(reader)
+		if err != nil {
+			errStr := fmt.Errorf("error creating gzip reader: %s session ID: %s", err.Error(), sessionID)
+			fmt.Println(errStr)
+			_ = returnProxyError(rw, errStr.Error())
+		}
+
+		resBytes, err = ioutil.ReadAll(gzreader)
+		if err != nil {
+			errStr := fmt.Errorf("error reading from gzip reader: %s session ID: %s", err.Error(), sessionID)
+			fmt.Println(errStr)
+			_ = returnProxyError(rw, errStr.Error())
+		}
 	}
 
 	for k, v := range res.Header {
+		if k == "Content-Length" {
+			fmt.Printf("skipping: %v\n", v)
+			continue
+		}
+
 		for i := 0; i < len(v); i++ {
 			rw.Header().Add(k, v[i])
 		}
 	}
+
+	rw.Header().Set("Content-Length", fmt.Sprint(len(resBytes)))
 
 	_, err = rw.Write(resBytes)
 	if err != nil {
@@ -135,19 +145,20 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if res.StatusCode != 200 {
+	/* Set status code last, or other header values and body will be lost. */
+	if res.StatusCode != http.StatusOK {
 		rw.WriteHeader(res.StatusCode)
 	}
 
 	fmt.Printf(`
-[RESPONSE ID]: %s
-[STATUS]: %d
-[HEADERS]:
-%s
-[RESPONSE BODY]:
-%s
+	[RESPONSE ID]: %s
+	[STATUS]: %d
+	[HEADERS]:
+	%s
+	[RESPONSE BODY]:
+	%s
 
-`, sessionID, res.StatusCode, headerToPrintableFormat(res.Header), string(resBytes))
+	`, sessionID, res.StatusCode, headerToPrintableFormat(res.Header), string(resBytes))
 }
 
 type proxyError struct {
