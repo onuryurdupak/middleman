@@ -32,7 +32,12 @@ func main() {
 		os.Exit(1)
 	}()
 
-	http.ListenAndServe(fmt.Sprintf(":%s", port), handler)
+	err := http.ListenAndServe(fmt.Sprintf(":%s", port), handler)
+	if err != nil {
+		fmt.Printf("\nError occured: %s", err.Error())
+		fmt.Println("\nStopping proxy.")
+		os.Exit(1)
+	}
 }
 
 type httpHandler struct {
@@ -103,38 +108,11 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 	defer res.Body.Close()
 
-	isGzipped := res.Header.Get("Content-Encoding") == "gzip"
-
-	// TODO(onur): Analyze gzip handling.
-	if isGzipped {
-		reader := bytes.NewReader(resBytes)
-		gzreader, err := gzip.NewReader(reader)
-		if err != nil {
-			errStr := fmt.Errorf("error creating gzip reader: %s session ID: %s", err.Error(), sessionID)
-			fmt.Println(errStr)
-			_ = returnProxyError(rw, errStr.Error())
-		}
-
-		resBytes, err = ioutil.ReadAll(gzreader)
-		if err != nil {
-			errStr := fmt.Errorf("error reading from gzip reader: %s session ID: %s", err.Error(), sessionID)
-			fmt.Println(errStr)
-			_ = returnProxyError(rw, errStr.Error())
-		}
-	}
-
 	for k, v := range res.Header {
-		if k == "Content-Length" {
-			fmt.Printf("skipping: %v\n", v)
-			continue
-		}
-
 		for i := 0; i < len(v); i++ {
 			rw.Header().Add(k, v[i])
 		}
 	}
-
-	rw.Header().Set("Content-Length", fmt.Sprint(len(resBytes)))
 
 	_, err = rw.Write(resBytes)
 	if err != nil {
@@ -150,13 +128,31 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		rw.WriteHeader(res.StatusCode)
 	}
 
+	if res.Header.Get("Content-Encoding") == "gzip" {
+		reader := bytes.NewReader(resBytes)
+		gzreader, err := gzip.NewReader(reader)
+		if err != nil {
+			errStr := fmt.Errorf("error creating gzip reader: %s session ID: %s", err.Error(), sessionID)
+			fmt.Println(errStr)
+			_ = returnProxyError(rw, errStr.Error())
+		}
+		/* Modifying resBytes for logging decompressed content AFTER we've written the response body. */
+		resBytes, err = ioutil.ReadAll(gzreader)
+		if err != nil {
+			errStr := fmt.Errorf("error reading from gzip reader: %s session ID: %s", err.Error(), sessionID)
+			fmt.Println(errStr)
+			_ = returnProxyError(rw, errStr.Error())
+		}
+	}
+
 	fmt.Printf(`
-	[RESPONSE ID]: %s
-	[STATUS]: %d
-	[HEADERS]:
-	%s
-	[RESPONSE BODY]:
-	%s
+
+[RESPONSE ID]: %s
+[STATUS]: %d
+[HEADERS]:
+%s
+[RESPONSE BODY]:
+%s
 
 	`, sessionID, res.StatusCode, headerToPrintableFormat(res.Header), string(resBytes))
 }
