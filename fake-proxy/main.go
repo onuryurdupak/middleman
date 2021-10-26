@@ -120,6 +120,12 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		_ = returnProxyError(rw, errStr.Error())
 	}
 
+	for k, v := range res.Header {
+		for i := 0; i < len(v); i++ {
+			rw.Header().Add(k, v[i])
+		}
+	}
+
 	_, err = rw.Write(resBytes)
 	if err != nil {
 		errStr := fmt.Errorf("error writing server response for client: %s session ID: %s", err.Error(), sessionID)
@@ -127,6 +133,10 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 		_ = returnProxyError(rw, errStr.Error())
 		return
+	}
+
+	if res.StatusCode != 200 {
+		rw.WriteHeader(res.StatusCode)
 	}
 
 	fmt.Printf(`
@@ -164,9 +174,9 @@ func headerToPrintableFormat(h http.Header) string {
 	msg := ""
 	for k, v := range h {
 		if len(v) == 1 {
-			msg = fmt.Sprintf("%s%s: %s", msg, k, v[0])
+			msg = fmt.Sprintf("%s%s: %s\n", msg, k, v[0])
 		} else {
-			msg = fmt.Sprintf("%s%s: %s", msg, k, v)
+			msg = fmt.Sprintf("%s%s: %s\n", msg, k, v)
 		}
 	}
 	return msg
