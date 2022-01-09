@@ -17,10 +17,24 @@ import (
 )
 
 const (
+	stamp_build_date  = "${build_date}"
+	stamp_commit_hash = "${commit_hash}"
+
+	errSuccess  = 0
+	errInput    = 1
+	errInternal = 2
+	errUnkown   = 3
+
 	port = "8080"
 )
 
 func main() {
+	args := os.Args[1:]
+	if len(args) == 1 && (args[0] == "version" || args[0] == "--version") {
+		fmt.Printf("Build Date: %s | Commit: %s\n", stamp_build_date, stamp_commit_hash)
+		os.Exit(errSuccess)
+	}
+
 	fmt.Printf("Starting proxy on port: %s\n", port)
 	handler := &httpHandler{}
 
@@ -29,14 +43,14 @@ func main() {
 	go func() {
 		<-c
 		fmt.Println("\nStopping proxy.")
-		os.Exit(1)
+		os.Exit(errSuccess)
 	}()
 
 	err := http.ListenAndServe(fmt.Sprintf(":%s", port), handler)
 	if err != nil {
 		fmt.Printf("\nError occured: %s", err.Error())
 		fmt.Println("\nStopping proxy.")
-		os.Exit(1)
+		os.Exit(errInternal)
 	}
 }
 
