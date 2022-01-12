@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -25,17 +26,47 @@ const (
 	errInternal = 2
 	errUnkown   = 3
 
-	port = "8080"
+	defaultPort int64 = 8080
+
+	helpPrompt  = "Run 'fake-proxy -h' for help."
+	helpMessage = `Fake-proxy runs on port 8080 by default.
+You can set a different port to listen on using -p argument. 
+Example: 
+fake-proxy -p 5000`
 )
 
 func main() {
 	args := os.Args[1:]
-	if len(args) == 1 && (args[0] == "version" || args[0] == "--version") {
-		fmt.Printf("Build Date: %s | Commit: %s\n", stamp_build_date, stamp_commit_hash)
-		os.Exit(errSuccess)
+	if len(args) == 1 {
+		switch {
+		case args[0] == "version" || args[0] == "--version" || args[0] == "-v":
+			fmt.Printf("Build Date: %s | Commit: %s\n", stamp_build_date, stamp_commit_hash)
+			os.Exit(errSuccess)
+			return
+		case args[0] == "help" || args[0] == "--help" || args[0] == "-h":
+			fmt.Println(helpMessage)
+			os.Exit(errSuccess)
+		default:
+			fmt.Println(helpPrompt)
+			os.Exit(errInput)
+		}
 	}
 
-	fmt.Printf("Starting proxy on port: %s\n", port)
+	portToUse := defaultPort
+	if len(args) == 2 && args[0] == "-p" {
+		inputPort, err := strconv.ParseInt(args[1], 10, 64)
+		if err != nil {
+			fmt.Printf("Invalid port number: '%v'.\n", args[1])
+			os.Exit(errInput)
+		}
+		if inputPort < 0 || inputPort > 65535 {
+			fmt.Printf("Port number must be between 0 - 65535.\n")
+			os.Exit(errInput)
+		}
+		portToUse = inputPort
+	}
+
+	fmt.Printf("Starting proxy on port: %d\n", portToUse)
 	handler := &httpHandler{}
 
 	c := make(chan os.Signal)
@@ -46,7 +77,7 @@ func main() {
 		os.Exit(errSuccess)
 	}()
 
-	err := http.ListenAndServe(fmt.Sprintf(":%s", port), handler)
+	err := http.ListenAndServe(fmt.Sprintf(":%d", portToUse), handler)
 	if err != nil {
 		fmt.Printf("\nError occured: %s", err.Error())
 		fmt.Println("\nStopping proxy.")
