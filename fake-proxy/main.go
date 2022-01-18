@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"fake-proxy/embed"
+	"fake-proxy/utils/stdout_utils"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -18,21 +20,7 @@ import (
 )
 
 const (
-	stamp_build_date  = "${build_date}"
-	stamp_commit_hash = "${commit_hash}"
-
-	errSuccess  = 0
-	errInput    = 1
-	errInternal = 2
-	errUnkown   = 3
-
 	defaultPort int64 = 8080
-
-	helpPrompt  = "Run 'fake-proxy -h' for help."
-	helpMessage = `Fake-proxy runs on port 8080 by default.
-You can set a different port to listen on using -p argument. 
-Example: 
-fake-proxy -p 5000`
 )
 
 func main() {
@@ -40,15 +28,18 @@ func main() {
 	if len(args) == 1 {
 		switch {
 		case args[0] == "version" || args[0] == "--version" || args[0] == "-v":
-			fmt.Printf("Build Date: %s | Commit: %s\n", stamp_build_date, stamp_commit_hash)
-			os.Exit(errSuccess)
+			fmt.Printf("Build Date: %s | Commit: %s\n", embed.Stamp_build_date, embed.Stamp_commit_hash)
+			os.Exit(embed.ErrSuccess)
 			return
 		case args[0] == "help" || args[0] == "--help" || args[0] == "-h":
-			fmt.Println(helpMessage)
-			os.Exit(errSuccess)
+			fmt.Printf("%s\n", stdout_utils.ProcessStyle(embed.HelpMessage))
+			os.Exit(embed.ErrSuccess)
+		case args[0] == "-hr":
+			fmt.Printf("%s\n", stdout_utils.RemoveStyle(embed.HelpMessage))
+			os.Exit(embed.ErrSuccess)
 		default:
-			fmt.Println(helpPrompt)
-			os.Exit(errInput)
+			fmt.Println(embed.HelpPrompt)
+			os.Exit(embed.ErrInput)
 		}
 	}
 
@@ -57,11 +48,11 @@ func main() {
 		inputPort, err := strconv.ParseInt(args[1], 10, 64)
 		if err != nil {
 			fmt.Printf("Invalid port number: '%v'.\n", args[1])
-			os.Exit(errInput)
+			os.Exit(embed.ErrInput)
 		}
 		if inputPort < 0 || inputPort > 65535 {
 			fmt.Printf("Port number must be between 0 - 65535.\n")
-			os.Exit(errInput)
+			os.Exit(embed.ErrInput)
 		}
 		portToUse = inputPort
 	}
@@ -74,14 +65,14 @@ func main() {
 	go func() {
 		<-c
 		fmt.Println("\nStopping proxy.")
-		os.Exit(errSuccess)
+		os.Exit(embed.ErrSuccess)
 	}()
 
 	err := http.ListenAndServe(fmt.Sprintf(":%d", portToUse), handler)
 	if err != nil {
 		fmt.Printf("\nError occured: %s", err.Error())
 		fmt.Println("\nStopping proxy.")
-		os.Exit(errInternal)
+		os.Exit(embed.ErrInternal)
 	}
 }
 
@@ -175,14 +166,14 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 	if res.Header.Get("Content-Encoding") == "gzip" {
 		reader := bytes.NewReader(resBytes)
-		gzreader, err := gzip.NewReader(reader)
+		gzipReader, err := gzip.NewReader(reader)
 		if err != nil {
 			errStr := fmt.Errorf("error creating gzip reader: %s session ID: %s", err.Error(), sessionID)
 			fmt.Println(errStr)
 			_ = returnProxyError(rw, errStr.Error())
 		}
 		/* Modifying resBytes for logging decompressed content AFTER we've written the response body. */
-		resBytes, err = ioutil.ReadAll(gzreader)
+		resBytes, err = ioutil.ReadAll(gzipReader)
 		if err != nil {
 			errStr := fmt.Errorf("error reading from gzip reader: %s session ID: %s", err.Error(), sessionID)
 			fmt.Println(errStr)

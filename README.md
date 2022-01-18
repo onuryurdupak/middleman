@@ -1,5 +1,7 @@
 # fake-proxy
-#### What is it?
+
+
+#### DESCRIPTION:
 
 fake-proxy `(B)` acts as an intermediary which forwards requests from client `(A)` to server `(C)` and returns the server's response to client `(A)`. 
 
@@ -15,9 +17,13 @@ from your local client application.
 
 It will redirect request headers and request body.
 
-#### Use case:
+#### USAGE:
 
 `client (A) -> fake-proxy (B) -> server (C)`  
 
 You are developing & debugging a project on your local machine `(A)` which needs to make API calls to an application on a remote machine `(C)`. You local machine `(A)` has no direct access to remote machine `(C)`, but your deployment environment `(B)` does.
 There may be similar circumstances where it is more practical to go this way instead of configuring & using a real http proxy.
+
+To run fake-proxy on a custom port use -p argument. Example:
+
+`fake-proxy -p 5000`
