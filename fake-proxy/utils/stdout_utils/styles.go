@@ -1,9 +1,15 @@
 package stdout_utils
 
 import (
-	"github.com/fatih/color"
-	"regexp"
+	"fmt"
 	"strings"
+
+	"github.com/fatih/color"
+)
+
+const (
+	seekModeOpener byte = 0
+	seekModeCloser byte = 1
 )
 
 type styleData struct {
@@ -27,15 +33,23 @@ var styles = []styleData{
 // Output string can be sent to stdout which will be displayed as a style applied text.
 //
 // Examples:
+//
 // <b>This will be printed in bold.</b>
+//
 // <u>This will be printed underlined./<u>
+//
 // <b><u>This will be printed both bold and underlined.</u></b>
+//
 // <yellow>This will be printed in yellow.</yellow>
-func ProcessStyle(in string) string {
+func ProcessStyle(in string) (string, error) {
+	var err error
 	for _, sd := range styles {
-		in = processStyle(in, sd)
+		in, err = processStyle(in, sd)
+		if err != nil {
+			return "", err
+		}
 	}
-	return in
+	return in, nil
 }
 
 // RemoveStyle removes style tags from input string and returns it.
@@ -46,24 +60,65 @@ func RemoveStyle(in string) string {
 	return in
 }
 
-func processStyle(in string, styleData styleData) string {
-	regStyle, err := regexp.Compile(styleData.openTag + `.+` + styleData.closeTag)
-	if err != nil {
-		return in
-	}
+func processStyle(in string, styleData styleData) (string, error) {
+	sb := strings.Builder{}
+	var builtString string
 
-	replaces := make(map[string]string)
-	matches := regStyle.FindAllString(in, -1)
-	for _, m := range matches {
-		textContent := strings.Replace(strings.Replace(m, styleData.openTag, "", 1), styleData.closeTag, "", 1)
-		replaceText := styleData.style.Sprintf("%s", textContent)
-		replaces[m] = replaceText
-	}
+	opener := styleData.openTag
+	closer := styleData.closeTag
 
-	for k, v := range replaces {
-		in = strings.Replace(in, k, v, -1)
+	openerSize := len(opener)
+	closerSize := len(closer)
+
+	cursor := 0
+	lastSplit := 0
+	seekMode := seekModeOpener
+	for {
+		var selection string
+		var endRange int
+		if seekMode == seekModeOpener {
+			endRange = cursor + openerSize
+		} else if seekMode == seekModeCloser {
+			endRange = cursor + closerSize
+		} else {
+			return "", fmt.Errorf("unexpected seek mode: %d", seekMode)
+		}
+
+		if endRange > len(in) {
+			if seekMode == seekModeOpener {
+				sb.WriteString(in[lastSplit:])
+			} else if seekMode == seekModeCloser {
+				sb.WriteString(styleData.style.Sprint(in[lastSplit:]))
+			} else {
+				return "", fmt.Errorf("unexpected seek mode: %d", seekMode)
+			}
+
+			builtString = sb.String()
+			builtString = strings.Replace(builtString, styleData.openTag, "", -1)
+			builtString = strings.Replace(builtString, styleData.closeTag, "", -1)
+
+			break
+		}
+
+		selection = in[cursor:endRange]
+
+		if seekMode == seekModeOpener && selection == opener {
+			appendText := in[lastSplit:endRange]
+			sb.WriteString(appendText)
+			lastSplit = endRange
+			seekMode = seekModeCloser
+			cursor += openerSize
+		} else if seekMode == seekModeCloser && selection == closer {
+			appendText := styleData.style.Sprintf("%s", in[lastSplit:endRange])
+			sb.WriteString(appendText)
+			lastSplit = endRange
+			seekMode = seekModeOpener
+			cursor += closerSize
+		} else {
+			cursor++
+		}
 	}
-	return in
+	return builtString, nil
 }
 
 func removeStyle(in string, styleData styleData) string {

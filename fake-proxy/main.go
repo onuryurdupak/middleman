@@ -32,7 +32,11 @@ func main() {
 			os.Exit(embed.ErrSuccess)
 			return
 		case args[0] == "help" || args[0] == "--help" || args[0] == "-h":
-			fmt.Printf("%s\n", stdout_utils.ProcessStyle(embed.HelpMessage))
+			msg, err := stdout_utils.ProcessStyle(embed.HelpMessage)
+			if err != nil {
+				os.Exit(embed.ErrInternal)
+			}
+			fmt.Printf("%s\n", msg)
 			os.Exit(embed.ErrSuccess)
 		case args[0] == "-hr":
 			fmt.Printf("%s\n", stdout_utils.RemoveStyle(embed.HelpMessage))
