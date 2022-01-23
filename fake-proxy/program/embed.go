@@ -1,4 +1,4 @@
-package embed
+package program
 
 const (
 	Stamp_build_date  = "${build_date}"

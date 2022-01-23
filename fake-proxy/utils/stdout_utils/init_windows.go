@@ -1,10 +1,11 @@
 //go:build windows
 
-package main
+package stdout_utils
 
 import (
-	"golang.org/x/sys/windows"
 	"os"
+
+	"golang.org/x/sys/windows"
 )
 
 func init() {

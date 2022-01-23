@@ -14,7 +14,7 @@ COMMIT_HASH=$(git rev-parse --short HEAD)
 
 # Get interpolator from https://github.com/onuryurdupak/interpolator
 # shellcheck disable=SC2016
-interpolator "$REPO_ROOT/fake-proxy/embed/data.go" ':=' 'Stamp_build_date\s+=\s+"\${build_date}":=Stamp_build_date = '\""$DATE"\"
+interpolator "$REPO_ROOT/fake-proxy/program/embed.go" ':=' 'Stamp_build_date\s+=\s+"\${build_date}":=Stamp_build_date = '\""$DATE"\"
 code=$?
 if [ "$code" != "0" ]; then
     echo "Error: Attempt to run interpolator exited with code: $code."
@@ -22,7 +22,7 @@ if [ "$code" != "0" ]; then
 fi
 
 # shellcheck disable=SC2016
-interpolator "$REPO_ROOT/fake-proxy/embed/data.go" ':=' 'Stamp_commit_hash\s+=\s+"\${commit_hash}":=Stamp_commit_hash = '\""$COMMIT_HASH"\"
+interpolator "$REPO_ROOT/fake-proxy/program/embed.go" ':=' 'Stamp_commit_hash\s+=\s+"\${commit_hash}":=Stamp_commit_hash = '\""$COMMIT_HASH"\"
 code=$?
 if [ "$code" != "0" ]; then
     echo "Error: Attempt to run interpolator exited with code: $code."
