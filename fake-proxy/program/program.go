@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"fake-proxy/utils/stdout_utils"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -101,13 +102,13 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	fmt.Printf(`
-[REQUEST ID] : %s
-[URL]: %s
-[METHOD]: %s
-[HEADERS]:
+	stdout_utils.PrintfStyled(`
+<b><yellow>[REQUEST ID]:</yellow></b> %s
+<b><yellow>[URL]:</yellow></b> %s
+<b><yellow>[METHOD]:</yellow></b> %s
+<b><yellow>[HEADERS]:</yellow></b>
 %s
-[REQUEST BODY]:
+<b><yellow>[REQUEST BODY]:</yellow></b>
 %s
 
 `, sessionID, redirectUrl, r.Method, headerToPrintableFormat(r.Header), string(bodyBytes))
@@ -178,13 +179,13 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fmt.Printf(`
+	stdout_utils.PrintfStyled(`
 
-[RESPONSE ID]: %s
-[STATUS]: %d
-[HEADERS]:
+<b><yellow>[RESPONSE ID]:</yellow></b> %s
+<b><yellow>[STATUS]:</yellow></b> %d
+<b><yellow>[HEADERS]:</yellow></b>
 %s
-[RESPONSE BODY]:
+<b><yellow>[RESPONSE BODY]:</yellow></b>
 %s
 
 	`, sessionID, res.StatusCode, headerToPrintableFormat(res.Header), string(resBytes))

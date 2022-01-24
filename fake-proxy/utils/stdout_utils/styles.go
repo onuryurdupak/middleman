@@ -52,6 +52,12 @@ func ProcessStyle(in string) (string, error) {
 	return in, nil
 }
 
+func PrintfStyled(format string, args ...interface{}) {
+	rawString := fmt.Sprintf(format, args...)
+	processedString, _ := ProcessStyle(rawString)
+	fmt.Print(processedString)
+}
+
 // RemoveStyle removes style tags from input string and returns it.
 func RemoveStyle(in string) string {
 	for _, sd := range styles {
