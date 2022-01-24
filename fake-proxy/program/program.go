@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"fake-proxy/utils/slice_utils"
 	"fake-proxy/utils/stdout_utils"
 	"fmt"
 	"io/ioutil"
@@ -15,12 +16,16 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/go-xmlfmt/xmlfmt"
 	"github.com/google/uuid"
+	"github.com/yosssi/gohtml"
 )
 
 const (
 	defaultPort int64 = 8080
 )
+
+var rawMode bool
 
 func Main(args []string) {
 	if len(args) == 1 {
@@ -35,6 +40,8 @@ func Main(args []string) {
 		case args[0] == "-hr":
 			fmt.Println(helpMessageUnstyled())
 			os.Exit(ErrSuccess)
+		case args[0] == "--raw":
+			rawMode = slice_utils.RemoveString(&args, "--raw")
 		default:
 			fmt.Println(helpPrompt)
 			os.Exit(ErrInput)
@@ -87,16 +94,14 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errStr := fmt.Errorf("unable to parse URL: '%s' error: %w", redirectUrl, err)
 		fmt.Println(errStr)
-
 		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
 
-	bodyBytes, err := ioutil.ReadAll(r.Body)
+	reqBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		errStr := fmt.Errorf("error reading request body: %w", err)
 		fmt.Println(errStr)
-
 		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
@@ -106,14 +111,12 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 <b><yellow>[REQUEST ID]:</yellow></b> %s
 <b><yellow>[URL]:</yellow></b> %s
 <b><yellow>[METHOD]:</yellow></b> %s
-<b><yellow>[HEADERS]:</yellow></b>
+<b><yellow>[HEADERS]</yellow></b>
 %s
-<b><yellow>[REQUEST BODY]:</yellow></b>
-%s
+<b><yellow>[REQUEST BODY]</yellow></b>
+%s`, sessionID, redirectUrl, r.Method, headerToPrintableFormat(r.Header), bodyToPrintableFormat(r.Header, reqBytes, rawMode))
 
-`, sessionID, redirectUrl, r.Method, headerToPrintableFormat(r.Header), string(bodyBytes))
-
-	buffer := bytes.NewBuffer(bodyBytes)
+	buffer := bytes.NewBuffer(reqBytes)
 	nopCloser := ioutil.NopCloser(buffer)
 
 	httpReq := &http.Request{
@@ -127,7 +130,6 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errStr := fmt.Errorf("error executing http request: %s session ID: %s", err.Error(), sessionID)
 		fmt.Println(errStr)
-
 		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
@@ -152,7 +154,6 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errStr := fmt.Errorf("error writing server response for client: %s session ID: %s", err.Error(), sessionID)
 		fmt.Println(errStr)
-
 		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
@@ -183,12 +184,11 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 <b><yellow>[RESPONSE ID]:</yellow></b> %s
 <b><yellow>[STATUS]:</yellow></b> %d
-<b><yellow>[HEADERS]:</yellow></b>
+<b><yellow>[HEADERS]</yellow></b> 
 %s
-<b><yellow>[RESPONSE BODY]:</yellow></b>
+<b><yellow>[RESPONSE BODY]</yellow></b>
 %s
-
-	`, sessionID, res.StatusCode, headerToPrintableFormat(res.Header), string(resBytes))
+`, sessionID, res.StatusCode, headerToPrintableFormat(res.Header), bodyToPrintableFormat(res.Header, resBytes, rawMode))
 }
 
 type proxyError struct {
@@ -212,13 +212,47 @@ func returnProxyError(rw http.ResponseWriter, errMsg string) error {
 }
 
 func headerToPrintableFormat(h http.Header) string {
-	msg := ""
+	var sb strings.Builder
+	i := 0
+	length := len(h)
 	for k, v := range h {
 		if len(v) == 1 {
-			msg = fmt.Sprintf("%s%s: %s\n", msg, k, v[0])
+			sb.WriteString(fmt.Sprintf("<green>%s:</green> %s", k, v[0]))
 		} else {
-			msg = fmt.Sprintf("%s%s: %s\n", msg, k, v)
+			sb.WriteString(fmt.Sprintf("<green>%s:</green> %s", k, v))
 		}
+
+		if i != length-1 {
+			sb.WriteString("\n")
+		}
+
+		i++
 	}
-	return msg
+	return sb.String()
+}
+
+func bodyToPrintableFormat(h http.Header, body []byte, rawMode bool) string {
+	if rawMode {
+		return string(body)
+	}
+
+	contentTypeHeader := h["Content-Type"]
+	if len(contentTypeHeader) < 1 {
+		return string(body)
+	}
+	contentTypeValue := contentTypeHeader[0]
+	var marshalled []byte
+
+	if strings.Contains(contentTypeValue, "json") {
+		dst := &bytes.Buffer{}
+		json.Indent(dst, body, "", "  ")
+		marshalled = dst.Bytes()
+	} else if strings.Contains(contentTypeValue, "xml") {
+		marshalled = []byte(xmlfmt.FormatXML(string(body), "", "  ", true))
+	} else if strings.Contains(contentTypeValue, "html") {
+		marshalled = []byte(gohtml.Format(string(body)))
+	} else {
+		return string(body)
+	}
+	return string(marshalled)
 }

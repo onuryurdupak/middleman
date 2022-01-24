@@ -23,6 +23,7 @@ If your terminal does not render styles properly, run 'interpolator -hr' to view
 <b><u><yellow>PARAMETERS:</yellow></u></b>
 <b><yellow>-v</yellow></b>: Show version info.
 <b><yellow>-p</yellow></b>: Run on custom port.
+<b><yellow>--raw</b></yellow>: Print request & response bodies without prettifying.
 
 <b><u><yellow>DESCRIPTION</yellow></u></b>
 fake-proxy <b><yellow>(B)</yellow></b> acts as an intermediary which forwards requests from client <b><yellow>(A)</yellow></b> to server <b><yellow>(C)</yellow></b> and returns the server's response to client <b><yellow>(A)</yellow></b>.
