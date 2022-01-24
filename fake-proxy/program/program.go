@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
-	"fake-proxy/utils/stdout_utils"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -26,21 +25,17 @@ func Main(args []string) {
 	if len(args) == 1 {
 		switch {
 		case args[0] == "version" || args[0] == "--version" || args[0] == "-v":
-			fmt.Printf("Build Date: %s | Commit: %s\n", Stamp_build_date, Stamp_commit_hash)
+			fmt.Println(versionInfo())
 			os.Exit(ErrSuccess)
 			return
 		case args[0] == "help" || args[0] == "--help" || args[0] == "-h":
-			msg, err := stdout_utils.ProcessStyle(HelpMessage)
-			if err != nil {
-				os.Exit(ErrInternal)
-			}
-			fmt.Printf("%s\n", msg)
+			fmt.Println(helpMessageStyled())
 			os.Exit(ErrSuccess)
 		case args[0] == "-hr":
-			fmt.Printf("%s\n", stdout_utils.RemoveStyle(HelpMessage))
+			fmt.Println(helpMessageUnstyled())
 			os.Exit(ErrSuccess)
 		default:
-			fmt.Println(HelpPrompt)
+			fmt.Println(helpPrompt)
 			os.Exit(ErrInput)
 		}
 	}

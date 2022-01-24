@@ -1,5 +1,7 @@
 #!/bin/bash
 
+APP_FOLDER="fake-proxy"
+
 git diff --quiet HEAD
 code=$?
 
@@ -11,10 +13,11 @@ fi
 REPO_ROOT=$(git rev-parse --show-toplevel)
 DATE=$(date +'%Y.%m.%d')
 COMMIT_HASH=$(git rev-parse --short HEAD)
+SOURCE=$(git remote get-url origin)
 
 # Get interpolator from https://github.com/onuryurdupak/interpolator
 # shellcheck disable=SC2016
-interpolator "$REPO_ROOT/fake-proxy/program/embed.go" ':=' 'Stamp_build_date\s+=\s+"\${build_date}":=Stamp_build_date = '\""$DATE"\"
+interpolator "$REPO_ROOT/$APP_FOLDER/program/embed.go" ':=' 'stamp_build_date\s+=\s+"\${build_date}":=stamp_build_date = '\""$DATE"\"
 code=$?
 if [ "$code" != "0" ]; then
     echo "Error: Attempt to run interpolator exited with code: $code."
@@ -22,7 +25,15 @@ if [ "$code" != "0" ]; then
 fi
 
 # shellcheck disable=SC2016
-interpolator "$REPO_ROOT/fake-proxy/program/embed.go" ':=' 'Stamp_commit_hash\s+=\s+"\${commit_hash}":=Stamp_commit_hash = '\""$COMMIT_HASH"\"
+interpolator "$REPO_ROOT/$APP_FOLDER/program/embed.go" ':=' 'stamp_commit_hash\s+=\s+"\${commit_hash}":=stamp_commit_hash = '\""$COMMIT_HASH"\"
+code=$?
+if [ "$code" != "0" ]; then
+    echo "Error: Attempt to run interpolator exited with code: $code."
+    exit $code
+fi
+
+# shellcheck disable=SC2016
+interpolator "$REPO_ROOT/$APP_FOLDER/program/embed.go" ':=' 'stamp_source\s+=\s+"\${source}":=stamp_source = '\""$SOURCE"\"
 code=$?
 if [ "$code" != "0" ]; then
     echo "Error: Attempt to run interpolator exited with code: $code."
