@@ -150,17 +150,14 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	rw.WriteHeader(res.StatusCode)
+
 	_, err = rw.Write(resBytes)
 	if err != nil {
 		errStr := fmt.Errorf("error writing server response for client: %s session ID: %s", err.Error(), sessionID)
 		fmt.Println(errStr)
 		_ = returnProxyError(rw, errStr.Error())
 		return
-	}
-
-	/* Set status code last, or other header values and body will be lost. */
-	if res.StatusCode != http.StatusOK {
-		rw.WriteHeader(res.StatusCode)
 	}
 
 	if res.Header.Get("Content-Encoding") == "gzip" {
