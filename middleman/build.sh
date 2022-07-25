@@ -1,6 +1,6 @@
 #!/bin/bash
 
-APP_FOLDER="fake-proxy"
+APP_FOLDER="middleman"
 
 git diff --quiet HEAD
 code=$?

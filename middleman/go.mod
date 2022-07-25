@@ -1,4 +1,4 @@
-module fake-proxy
+module middleman
 
 go 1.16
 

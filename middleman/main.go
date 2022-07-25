@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fake-proxy/program"
+	"middleman/program"
 	"os"
 )
 
