@@ -19,6 +19,10 @@ Headers and body will be redirected to server `(C)` and their response will be r
 
 Middleman also pretty prints request/response data to stdout and brands request/response pairs with unique IDs.
 
+
+![Pretty printed output of request/response on default Ubuntu termianl.](/Readme/Pretty_Print_Example.png)
+
+
 #### USAGE:
 
 `client (A) -> middleman (B) -> server (C)`  
