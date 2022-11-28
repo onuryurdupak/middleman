@@ -38,10 +38,10 @@ if [ "$code" != "0" ]; then
     exit $code
 fi
 
-go env -w GOOS=linux GOARCH=amd64
+go env -w GOOS=windows GOARCH=amd64
 go build
 
-go env -w GOOS=windows GOARCH=amd64
+go env -w GOOS=linux GOARCH=amd64
 go build
 
 git reset --hard
