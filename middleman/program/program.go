@@ -5,7 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"middleman/utils/slice_utils"
 	"middleman/utils/stdout_utils"
 	"net/http"
@@ -98,7 +98,7 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqBytes, err := ioutil.ReadAll(r.Body)
+	reqBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		errStr := fmt.Errorf("error reading request body: %w", err)
 		fmt.Println(errStr)
@@ -117,7 +117,7 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 %s`, sessionID, redirectUrl, r.Method, headerToPrintableFormat(r.Header), bodyToPrintableFormat(r.Header, reqBytes, rawMode))
 
 	buffer := bytes.NewBuffer(reqBytes)
-	nopCloser := ioutil.NopCloser(buffer)
+	nopCloser := io.NopCloser(buffer)
 
 	httpReq := &http.Request{
 		Method: r.Method,
@@ -135,7 +135,7 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 	defer res.Body.Close()
 
-	resBytes, err := ioutil.ReadAll(res.Body)
+	resBytes, err := io.ReadAll(res.Body)
 	if err != nil {
 		errStr := fmt.Errorf("error reading response payload: %s session ID: %s", err.Error(), sessionID)
 		fmt.Println(errStr)
@@ -169,7 +169,7 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 			_ = returnProxyError(rw, errStr.Error())
 		}
 		/* Modifying resBytes for logging decompressed content AFTER we've written the response body. */
-		resBytes, err = ioutil.ReadAll(gzipReader)
+		resBytes, err = io.ReadAll(gzipReader)
 		if err != nil {
 			errStr := fmt.Errorf("error reading from gzip reader: %s session ID: %s", err.Error(), sessionID)
 			fmt.Println(errStr)

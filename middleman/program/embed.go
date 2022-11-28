@@ -18,7 +18,7 @@ const (
 	helpPrompt = `Run 'middleman -h' for help.`
 
 	helpMessage = `
-If your terminal does not render styles properly, run 'interpolator -hr' to view help in raw mode.
+If your terminal does not render styles properly, run 'middleman -hr' to view help in raw mode.
 
 <b><u><yellow>PARAMETERS:</yellow></u></b>
 <b><yellow>-v</yellow></b>: Show version info.
