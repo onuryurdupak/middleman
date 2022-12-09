@@ -2,7 +2,8 @@ package program
 
 import (
 	"fmt"
-	"middleman/utils/stdout_utils"
+
+	"github.com/onuryurdupak/gomod/stdout"
 )
 
 const (
@@ -35,10 +36,10 @@ Source: %s`, stamp_build_date, stamp_commit_hash, stamp_source)
 }
 
 func helpMessageStyled() string {
-	msg, _ := stdout_utils.ProcessStyle(helpMessage)
+	msg, _ := stdout.ProcessStyle(helpMessage)
 	return msg
 }
 
 func helpMessageUnstyled() string {
-	return stdout_utils.RemoveStyle(helpMessage)
+	return stdout.RemoveStyle(helpMessage)
 }

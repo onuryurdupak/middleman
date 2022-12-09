@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"middleman/utils/slice_utils"
-	"middleman/utils/stdout_utils"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/onuryurdupak/gomod/slice"
+	"github.com/onuryurdupak/gomod/stdout"
 
 	"github.com/go-xmlfmt/xmlfmt"
 	"github.com/google/uuid"
@@ -41,7 +42,7 @@ func Main(args []string) {
 			fmt.Println(helpMessageUnstyled())
 			os.Exit(ErrSuccess)
 		case args[0] == "--raw":
-			rawMode = slice_utils.RemoveString(&args, "--raw")
+			rawMode = slice.RemoveString(&args, "--raw")
 		default:
 			fmt.Println(helpPrompt)
 			os.Exit(ErrInput)
@@ -107,7 +108,7 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	stdout_utils.PrintfStyled(`
+	stdout.PrintfStyled(`
 <b><yellow>[REQUEST ID]:</yellow></b> %s
 <b><yellow>[URL]:</yellow></b> %s
 <b><yellow>[METHOD]:</yellow></b> %s
@@ -177,7 +178,7 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	stdout_utils.PrintfStyled(`
+	stdout.PrintfStyled(`
 
 <b><yellow>[RESPONSE ID]:</yellow></b> %s
 <b><yellow>[STATUS]:</yellow></b> %d
