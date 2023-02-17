@@ -86,16 +86,16 @@ type httpHandler struct {
 	httpCLi http.Client
 }
 
-func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	sessionID := uuid.New()
 
-	destionationURL := r.URL.String()
+	redirectUrl := strings.Replace(r.URL.RequestURI(), "/", "", 1)
+	parsedRedirectUrl, err := url.Parse(redirectUrl)
 
-	parsedDestinationUrl, err := url.Parse(destionationURL)
 	if err != nil {
-		errStr := fmt.Errorf("unable to parse URL: '%s' error: %w", destionationURL, err)
+		errStr := fmt.Errorf("unable to parse URL: '%s' error: %w", redirectUrl, err)
 		fmt.Println(errStr)
-		_ = returnProxyError(w, errStr.Error())
+		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
 
@@ -103,7 +103,7 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errStr := fmt.Errorf("error reading request body: %w", err)
 		fmt.Println(errStr)
-		_ = returnProxyError(w, errStr.Error())
+		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
 	defer r.Body.Close()
@@ -115,28 +115,23 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 <b><yellow>[HEADERS]</yellow></b>
 %s
 <b><yellow>[REQUEST BODY]</yellow></b>
-%s`, sessionID, destionationURL, r.Method, headerToPrintableFormat(r.Header), bodyToPrintableFormat(r.Header, reqBytes, rawMode))
+%s`, sessionID, redirectUrl, r.Method, headerToPrintableFormat(r.Header), bodyToPrintableFormat(r.Header, reqBytes, rawMode))
 
 	buffer := bytes.NewBuffer(reqBytes)
 	nopCloser := io.NopCloser(buffer)
 
 	httpReq := &http.Request{
 		Method: r.Method,
-		URL:    parsedDestinationUrl,
+		URL:    parsedRedirectUrl,
 		Header: r.Header,
 		Body:   nopCloser,
-	}
-
-	if httpReq.Method == http.MethodConnect {
-		w.WriteHeader(http.StatusOK)
-		return
 	}
 
 	res, err := h.httpCLi.Do(httpReq)
 	if err != nil {
 		errStr := fmt.Errorf("error executing http request: %s session ID: %s", err.Error(), sessionID)
 		fmt.Println(errStr)
-		_ = returnProxyError(w, errStr.Error())
+		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
 	defer res.Body.Close()
@@ -145,24 +140,24 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errStr := fmt.Errorf("error reading response payload: %s session ID: %s", err.Error(), sessionID)
 		fmt.Println(errStr)
-		_ = returnProxyError(w, errStr.Error())
+		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
 	defer res.Body.Close()
 
 	for k, v := range res.Header {
 		for i := 0; i < len(v); i++ {
-			w.Header().Add(k, v[i])
+			rw.Header().Add(k, v[i])
 		}
 	}
 
-	w.WriteHeader(res.StatusCode)
+	rw.WriteHeader(res.StatusCode)
 
-	_, err = w.Write(resBytes)
+	_, err = rw.Write(resBytes)
 	if err != nil {
 		errStr := fmt.Errorf("error writing server response for client: %s session ID: %s", err.Error(), sessionID)
 		fmt.Println(errStr)
-		_ = returnProxyError(w, errStr.Error())
+		_ = returnProxyError(rw, errStr.Error())
 		return
 	}
 
@@ -172,14 +167,14 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			errStr := fmt.Errorf("error creating gzip reader: %s session ID: %s", err.Error(), sessionID)
 			fmt.Println(errStr)
-			_ = returnProxyError(w, errStr.Error())
+			_ = returnProxyError(rw, errStr.Error())
 		}
 		/* Modifying resBytes for logging decompressed content AFTER we've written the response body. */
 		resBytes, err = io.ReadAll(gzipReader)
 		if err != nil {
 			errStr := fmt.Errorf("error reading from gzip reader: %s session ID: %s", err.Error(), sessionID)
 			fmt.Println(errStr)
-			_ = returnProxyError(w, errStr.Error())
+			_ = returnProxyError(rw, errStr.Error())
 		}
 	}
 
