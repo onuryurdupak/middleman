@@ -14,8 +14,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/onuryurdupak/gomod/slice"
-	"github.com/onuryurdupak/gomod/stdout"
+	"github.com/onuryurdupak/gomod/v2/slice"
+	"github.com/onuryurdupak/gomod/v2/stdout"
 
 	"github.com/go-xmlfmt/xmlfmt"
 	"github.com/google/uuid"

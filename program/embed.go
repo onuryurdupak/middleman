@@ -3,7 +3,7 @@ package program
 import (
 	"fmt"
 
-	"github.com/onuryurdupak/gomod/stdout"
+	"github.com/onuryurdupak/gomod/v2/stdout"
 )
 
 const (
