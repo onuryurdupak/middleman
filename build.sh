@@ -39,9 +39,9 @@ if [ "$code" != "0" ]; then
 fi
 
 go env -w GOOS=windows GOARCH=amd64
-go build
+go build -o middleman_x64.exe
 
 go env -w GOOS=linux GOARCH=amd64
-go build
+go build -o middleman_x64
 
 git reset --hard
