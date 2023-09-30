@@ -38,10 +38,10 @@ if [ "$code" != "0" ]; then
     exit $code
 fi
 
-go env -w GOOS=windows GOARCH=amd64
+go env -w GOOS=windows GOARCH=amd64 CGO_ENABLED=0
 go build -o middleman_x64.exe
 
-go env -w GOOS=linux GOARCH=amd64
+go env -w GOOS=linux GOARCH=amd64 CGO_ENABLED=0
 go build -o middleman_x64
 
 git reset --hard
