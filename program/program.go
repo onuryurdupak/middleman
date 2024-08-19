@@ -243,7 +243,7 @@ func bodyToPrintableFormat(h http.Header, body []byte, rawMode bool) string {
 
 	if strings.Contains(contentTypeValue, "json") {
 		dst := &bytes.Buffer{}
-		json.Indent(dst, body, "", "  ")
+		_ = json.Indent(dst, body, "", "  ")
 		marshalled = dst.Bytes()
 	} else if strings.Contains(contentTypeValue, "xml") {
 		marshalled = []byte(xmlfmt.FormatXML(string(body), "", "  ", true))

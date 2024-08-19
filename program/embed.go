@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	stamp_build_date  = "${build_date}"
-	stamp_commit_hash = "${commit_hash}"
-	stamp_source      = "${source}"
+	stamp_build_date    = "${build_date}"
+	stamp_build_version = "${build_version}"
+	stamp_source        = "${source}"
 
 	ErrSuccess  = 0
 	ErrInput    = 1
@@ -31,8 +31,8 @@ Readme is availabile at: https://github.com/onuryurdupak/middleman#readme
 )
 
 func versionInfo() string {
-	return fmt.Sprintf(`Build Date: %s | Commit: %s
-Source: %s`, stamp_build_date, stamp_commit_hash, stamp_source)
+	return fmt.Sprintf(`Build Date: %s | Version: %s
+Source: %s`, stamp_build_date, stamp_build_version, stamp_source)
 }
 
 func helpMessageStyled() string {
