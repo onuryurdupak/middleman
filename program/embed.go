@@ -11,10 +11,10 @@ const (
 	stamp_build_version = "${build_version}"
 	stamp_source        = "${source}"
 
-	ErrSuccess  = 0
-	ErrInput    = 1
-	ErrInternal = 2
-	ErrUnknown  = 3
+	CodeSuccess     = 0
+	CodeInputErr    = 1
+	CodeInternalErr = 2
+	CodeUnknownErr  = 3
 
 	helpPrompt = `Run 'middleman -h' for help.`
 
@@ -23,10 +23,12 @@ If your terminal does not render styles properly, run 'middleman -hr' to view he
 
 <b><u><yellow>PARAMETERS:</yellow></u></b>
 <b><yellow>-v</yellow></b>: Show version info.
-<b><yellow>-p</yellow></b>: Run on custom port.
-<b><yellow>--raw</b></yellow>: Print request & response bodies without styles.
+<b><yellow>-h</yellow></b>: Show help.
+<b><yellow>-hr</yellow></b>: Show help without styles.
+<b><yellow>-p <port></yellow></b>: Run on custom port.
+<b><yellow>--raw</yellow></b>: Print request & response bodies as they are, without pretty-printing.
 
-Readme is availabile at: https://github.com/onuryurdupak/middleman#readme
+Readme is available at: https://github.com/onuryurdupak/middleman#readme
 `
 )
 

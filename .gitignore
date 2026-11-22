@@ -1,4 +1,5 @@
 *__debug_bin
 .idea/*
-middleman_x64
-middleman_x64.exe
+middleman_win_x64.exe
+middleman_linux_x64
+middleman_darwin_arm64

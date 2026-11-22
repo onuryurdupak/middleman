@@ -1,10 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"middleman/program"
 	"os"
 )
 
 func main() {
-	program.Main(os.Args[1:])
+	p := program.NewProgram()
+	output, code := p.Main(os.Args[1:])
+	if output != "" {
+		fmt.Println(output)
+	}
+	os.Exit(code)
 }

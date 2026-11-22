@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -26,26 +29,27 @@ const (
 	defaultPort int64 = 8080
 )
 
-var rawMode bool
+type Program struct {
+	out io.Writer // Where the proxy logs requests and responses.
+}
 
-func Main(args []string) {
+func NewProgram() *Program {
+	return &Program{out: os.Stdout}
+}
+
+func (p *Program) Main(args []string) (output string, code int) {
+	rawMode := slice.RemoveString(&args, "--raw")
+
 	if len(args) == 1 {
-		switch {
-		case args[0] == "version" || args[0] == "--version" || args[0] == "-v":
-			fmt.Println(versionInfo())
-			os.Exit(ErrSuccess)
-			return
-		case args[0] == "help" || args[0] == "--help" || args[0] == "-h":
-			fmt.Println(helpMessageStyled())
-			os.Exit(ErrSuccess)
-		case args[0] == "-hr":
-			fmt.Println(helpMessageUnstyled())
-			os.Exit(ErrSuccess)
-		case args[0] == "--raw":
-			rawMode = slice.RemoveString(&args, "--raw")
+		switch args[0] {
+		case "version", "--version", "-v":
+			return versionInfo(), CodeSuccess
+		case "help", "--help", "-h":
+			return helpMessageStyled(), CodeSuccess
+		case "-hr":
+			return helpMessageUnstyled(), CodeSuccess
 		default:
-			fmt.Println(helpPrompt)
-			os.Exit(ErrInput)
+			return helpPrompt, CodeInputErr
 		}
 	}
 
@@ -53,37 +57,47 @@ func Main(args []string) {
 	if len(args) == 2 && args[0] == "-p" {
 		inputPort, err := strconv.ParseInt(args[1], 10, 64)
 		if err != nil {
-			fmt.Printf("Invalid port number: '%v'.\n", args[1])
-			os.Exit(ErrInput)
+			return fmt.Sprintf("Invalid port number: '%v'.", args[1]), CodeInputErr
 		}
 		if inputPort < 0 || inputPort > 65535 {
-			fmt.Printf("Port number must be between 0 - 65535.\n")
-			os.Exit(ErrInput)
+			return "Port number must be between 0 - 65535.", CodeInputErr
 		}
 		portToUse = inputPort
 	}
 
-	fmt.Printf("Starting proxy on port: %d\n", portToUse)
-	handler := &httpHandler{}
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", portToUse),
+		Handler: &httpHandler{rawMode: rawMode, out: p.out},
+	}
 
-	c := make(chan os.Signal, 2)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
+
+	done := make(chan struct{})
+	defer close(done)
+
 	go func() {
-		<-c
-		fmt.Println("\nStopping proxy.")
-		os.Exit(ErrSuccess)
+		select {
+		case <-signals:
+			_ = server.Close()
+		case <-done:
+		}
 	}()
 
-	err := http.ListenAndServe(fmt.Sprintf(":%d", portToUse), handler)
-	if err != nil {
-		fmt.Printf("\nError occured: %s", err.Error())
-		fmt.Println("\nStopping proxy.")
-		os.Exit(ErrInternal)
+	fmt.Fprintf(p.out, "Starting proxy on port: %d\n", portToUse)
+
+	err := server.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return "\nStopping proxy.", CodeSuccess
 	}
+	return fmt.Sprintf("\nError occured: %s\nStopping proxy.", err.Error()), CodeInternalErr
 }
 
 type httpHandler struct {
 	httpCLi http.Client
+	rawMode bool
+	out     io.Writer
 }
 
 func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
@@ -94,28 +108,28 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		errStr := fmt.Errorf("unable to parse URL: '%s' error: %w", redirectUrl, err)
-		fmt.Println(errStr)
-		_ = returnProxyError(rw, errStr.Error())
+		fmt.Fprintln(h.out, errStr)
+		_ = returnProxyError(rw, http.StatusBadRequest, errStr.Error())
 		return
 	}
 
 	reqBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		errStr := fmt.Errorf("error reading request body: %w", err)
-		fmt.Println(errStr)
-		_ = returnProxyError(rw, errStr.Error())
+		fmt.Fprintln(h.out, errStr)
+		_ = returnProxyError(rw, http.StatusBadRequest, errStr.Error())
 		return
 	}
 	defer r.Body.Close()
 
-	stdout.PrintfStyled(`
+	printStyled(h.out, `
 <b><yellow>[REQUEST ID]:</yellow></b> %s
 <b><yellow>[URL]:</yellow></b> %s
 <b><yellow>[METHOD]:</yellow></b> %s
 <b><yellow>[HEADERS]</yellow></b>
 %s
 <b><yellow>[REQUEST BODY]</yellow></b>
-%s`, sessionID, redirectUrl, r.Method, headerToPrintableFormat(r.Header), bodyToPrintableFormat(r.Header, reqBytes, rawMode))
+%s`, sessionID, redirectUrl, r.Method, headerToPrintableFormat(r.Header), bodyToPrintableFormat(r.Header, reqBytes, h.rawMode))
 
 	buffer := bytes.NewBuffer(reqBytes)
 	nopCloser := io.NopCloser(buffer)
@@ -125,13 +139,15 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		URL:    parsedRedirectUrl,
 		Header: r.Header,
 		Body:   nopCloser,
+		/* Go's client ignores the Content-Length header and sends bodies chunked unless this is set. */
+		ContentLength: int64(len(reqBytes)),
 	}
 
 	res, err := h.httpCLi.Do(httpReq)
 	if err != nil {
 		errStr := fmt.Errorf("error executing http request: %s session ID: %s", err.Error(), sessionID)
-		fmt.Println(errStr)
-		_ = returnProxyError(rw, errStr.Error())
+		fmt.Fprintln(h.out, errStr)
+		_ = returnProxyError(rw, http.StatusBadGateway, errStr.Error())
 		return
 	}
 	defer res.Body.Close()
@@ -139,11 +155,10 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	resBytes, err := io.ReadAll(res.Body)
 	if err != nil {
 		errStr := fmt.Errorf("error reading response payload: %s session ID: %s", err.Error(), sessionID)
-		fmt.Println(errStr)
-		_ = returnProxyError(rw, errStr.Error())
+		fmt.Fprintln(h.out, errStr)
+		_ = returnProxyError(rw, http.StatusBadGateway, errStr.Error())
 		return
 	}
-	defer res.Body.Close()
 
 	for k, v := range res.Header {
 		for i := 0; i < len(v); i++ {
@@ -155,30 +170,26 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 	_, err = rw.Write(resBytes)
 	if err != nil {
+		/* Status and headers are already sent, so the client can not be told about this. */
 		errStr := fmt.Errorf("error writing server response for client: %s session ID: %s", err.Error(), sessionID)
-		fmt.Println(errStr)
-		_ = returnProxyError(rw, errStr.Error())
+		fmt.Fprintln(h.out, errStr)
 		return
 	}
 
+	/* The client already has the response, so from here on errors only affect logging and are not sent to the client. */
+	var printableResBody string
 	if res.Header.Get("Content-Encoding") == "gzip" {
-		reader := bytes.NewReader(resBytes)
-		gzipReader, err := gzip.NewReader(reader)
+		decompressed, err := gunzip(resBytes)
 		if err != nil {
-			errStr := fmt.Errorf("error creating gzip reader: %s session ID: %s", err.Error(), sessionID)
-			fmt.Println(errStr)
-			_ = returnProxyError(rw, errStr.Error())
+			printableResBody = fmt.Sprintf("(could not decompress gzip body for logging: %s)", err.Error())
+		} else {
+			printableResBody = bodyToPrintableFormat(res.Header, decompressed, h.rawMode)
 		}
-		/* Modifying resBytes for logging decompressed content AFTER we've written the response body. */
-		resBytes, err = io.ReadAll(gzipReader)
-		if err != nil {
-			errStr := fmt.Errorf("error reading from gzip reader: %s session ID: %s", err.Error(), sessionID)
-			fmt.Println(errStr)
-			_ = returnProxyError(rw, errStr.Error())
-		}
+	} else {
+		printableResBody = bodyToPrintableFormat(res.Header, resBytes, h.rawMode)
 	}
 
-	stdout.PrintfStyled(`
+	printStyled(h.out, `
 
 <b><yellow>[RESPONSE ID]:</yellow></b> %s
 <b><yellow>[STATUS]:</yellow></b> %d
@@ -186,47 +197,52 @@ func (h *httpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 %s
 <b><yellow>[RESPONSE BODY]</yellow></b>
 %s
-`, sessionID, res.StatusCode, headerToPrintableFormat(res.Header), bodyToPrintableFormat(res.Header, resBytes, rawMode))
+`, sessionID, res.StatusCode, headerToPrintableFormat(res.Header), printableResBody)
+}
+
+func gunzip(data []byte) ([]byte, error) {
+	gzipReader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer gzipReader.Close()
+	return io.ReadAll(gzipReader)
 }
 
 type proxyError struct {
 	ProxyErrorMessage string `json:"proxyErrorMessage"`
 }
 
-func returnProxyError(rw http.ResponseWriter, errMsg string) error {
+func returnProxyError(rw http.ResponseWriter, statusCode int, errMsg string) error {
 	pe := &proxyError{ProxyErrorMessage: errMsg}
 	jsonBytes, _ := json.Marshal(pe)
 
-	rw.WriteHeader(500)
-
-	for k, v := range rw.Header() {
-		fmt.Println(k + ":" + v[0])
-	}
-
 	rw.Header().Set("Content-Type", "application/json")
+	rw.WriteHeader(statusCode)
 
 	_, err := rw.Write(jsonBytes)
 	return err
 }
 
+// printStyled applies style tags in format only, then fills in args.
+// Args such as headers and bodies are printed as is, so tags like <b> inside them are not interpreted.
+func printStyled(w io.Writer, format string, args ...any) {
+	styledFormat, _ := stdout.ProcessStyle(format)
+	fmt.Fprintf(w, styledFormat, args...)
+}
+
+// style applies style tags to a string that contains no user data.
+func style(s string) string {
+	styled, _ := stdout.ProcessStyle(s)
+	return styled
+}
+
 func headerToPrintableFormat(h http.Header) string {
-	var sb strings.Builder
-	i := 0
-	length := len(h)
-	for k, v := range h {
-		if len(v) == 1 {
-			sb.WriteString(fmt.Sprintf("<green>%s:</green> %s", k, v[0]))
-		} else {
-			sb.WriteString(fmt.Sprintf("<green>%s:</green> %s", k, v))
-		}
-
-		if i != length-1 {
-			sb.WriteString("\n")
-		}
-
-		i++
+	lines := make([]string, 0, len(h))
+	for _, k := range slices.Sorted(maps.Keys(h)) {
+		lines = append(lines, style("<green>"+k+":</green>")+" "+strings.Join(h[k], ", "))
 	}
-	return sb.String()
+	return strings.Join(lines, "\n")
 }
 
 func bodyToPrintableFormat(h http.Header, body []byte, rawMode bool) string {
@@ -243,7 +259,10 @@ func bodyToPrintableFormat(h http.Header, body []byte, rawMode bool) string {
 
 	if strings.Contains(contentTypeValue, "json") {
 		dst := &bytes.Buffer{}
-		_ = json.Indent(dst, body, "", "  ")
+		err := json.Indent(dst, body, "", "  ")
+		if err != nil {
+			return string(body)
+		}
 		marshalled = dst.Bytes()
 	} else if strings.Contains(contentTypeValue, "xml") {
 		marshalled = []byte(xmlfmt.FormatXML(string(body), "", "  ", true))
